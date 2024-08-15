@@ -12,8 +12,8 @@ Com o diagrama podemos identificar as Entidade e Atributos e fazer os relacionam
 
 A partir do MySQL Workbench vamos criar o banco de dados. Criaremos todas as tabelas, os relacionamentos, adicionar as constraints, as chaves primárias e estrangeiras de acordo com o nosso diagrama acima.
 
-~~~SQL
--- criação do banco de dados para o cenário de E-commerce 
+```SQL
+-- criação do banco de dados para o cenário de E-commerce
 create database ecommerce;
 use ecommerce;
 
@@ -60,7 +60,7 @@ create table orders(
     orderStatus enum('Cancelado','Confirmado','Em processamento') default 'Em processamento',
     orderDescription varchar(255),
     sendValue float default 10,
-    paymentCash boolean default false, 
+    paymentCash boolean default false,
     constraint fk_ordes_client foreign key (idOrderClient) references clients(idClient)
 			on update cascade
 );
@@ -143,16 +143,16 @@ create table productSupplier(
     constraint fk_product_supplier_supplier foreign key (idPsSupplier) references supplier(idSupplier),
     constraint fk_product_supplier_prodcut foreign key (idPsProduct) references product(idProduct)
 );
-~~~
+```
 
 ## 3. Inserção de Dados Exemplo
 
 Com o banco de dados pronto vamos persistir alguns dados para podermos fazer consultas e responder algumas perguntas.
 
-~~~SQL
+```SQL
 
 -- idClient, Fname, Minit, Lname, CPF, Address
-insert into Clients (Fname, Minit, Lname, CPF, address) 
+insert into Clients (Fname, Minit, Lname, CPF, address)
 	   values('Maria','M','Silva', 12346789, 'rua silva de prata 29, Carangola - Cidade das flores'),
 		     ('Matheus','O','Pimentel', 987654321,'rua alemeda 289, Centro - Cidade das flores'),
 			 ('Ricardo','F','Silva', 45678913,'avenida alemeda vinha 1009, Centro - Cidade das flores'),
@@ -175,7 +175,7 @@ insert into product (Pname, classification_kids, category, avaliação, size) va
 -- idOrder, idOrderClient, orderStatus, orderDescription, sendValue, paymentCash
 
 delete from orders where idOrderClient in  (1,2,3,4);
-insert into orders (idOrderClient, orderStatus, orderDescription, sendValue, paymentCash) values 
+insert into orders (idOrderClient, orderStatus, orderDescription, sendValue, paymentCash) values
 							 (1, default,'compra via aplicativo',null,1),
                              (2,default,'compra via aplicativo',50,0),
                              (3,'Confirmado',null,null,1),
@@ -189,7 +189,7 @@ insert into productOrder (idPOproduct, idPOorder, poQuantity, poStatus) values
                          (3,6,1,null);
 
 -- storageLocation,quantity
-insert into productStorage (storageLocation,quantity) values 
+insert into productStorage (storageLocation,quantity) values
 							('Rio de Janeiro',1000),
                             ('Rio de Janeiro',500),
                             ('São Paulo',10),
@@ -203,11 +203,11 @@ insert into storageLocation (idLproduct, idLstorage, location) values
                          (2,6,'GO');
 
 -- idSupplier, SocialName, CNPJ, contact
-insert into supplier (SocialName, CNPJ, contact) values 
+insert into supplier (SocialName, CNPJ, contact) values
 							('Almeida e filhos', 123456789123456,'21985474'),
                             ('Eletrônicos Silva',854519649143457,'21985484'),
                             ('Eletrônicos Valma', 934567893934695,'21975474');
-                            
+
 
 -- idPsSupplier, idPsProduct, quantity
 insert into productSupplier (idPsSupplier, idPsProduct, quantity) values
@@ -218,21 +218,21 @@ insert into productSupplier (idPsSupplier, idPsProduct, quantity) values
                          (2,5,10);
 
 -- idSeller, SocialName, AbstName, CNPJ, CPF, location, contact
-insert into seller (SocialName, AbstName, CNPJ, CPF, location, contact) values 
+insert into seller (SocialName, AbstName, CNPJ, CPF, location, contact) values
 						('Tech eletronics', null, 123456789456321, null, 'Rio de Janeiro', 219946287),
 					    ('Botique Durgas',null,null,123456783,'Rio de Janeiro', 219567895),
 						('Kids World',null,456789123654485,null,'São Paulo', 1198657484);
 
 
 -- idPseller, idPproduct, prodQuantity
-insert into productSeller (idPseller, idPproduct, prodQuantity) values 
+insert into productSeller (idPseller, idPproduct, prodQuantity) values
 						 (1,6,80),
                          (2,7,10);
 
 
-insert into orders (idOrderClient, orderStatus, orderDescription, sendValue, paymentCash) values 
+insert into orders (idOrderClient, orderStatus, orderDescription, sendValue, paymentCash) values
 							 (2, default,'compra via aplicativo',null,1);
-~~~
+```
 
 ## 4. Realizando Consultas ao Banco de Dados
 
@@ -240,35 +240,35 @@ Agora vamos realizar algumas consultas para responder algumas perguntas.
 
 ### Quais clientes possuem pedidos?
 
-~~~SQL
+```SQL
 select Fname,Lname, idOrder, orderStatus from clients c, orders o where c.idClient = idOrderClient;
-~~~
-![Clientes x pedidos]()
+```
+
+![Clientes x pedidos](https://github.com/devcaiada/db-logic-project/blob/main/assets/Clientes%20x%20pedidos.png?raw=true)
 
 Utilizando o Alias para personalizar a consulta:
 
-~~~SQL
+```SQL
 select concat(Fname,' ',Lname) as Client, idOrder as Request, orderStatus as Status from clients c, orders o where c.idClient = idOrderClient;
-~~~
+```
 
-![Cliente x pedido alias]()
+![Cliente x pedido alias](https://github.com/devcaiada/db-logic-project/blob/main/assets/Cliente%20x%20pedido%20alias.png?raw=true)
 
 ### Quantos clientes efetuaram pedidos?
 
-~~~SQL
-select count(*) from clients c, orders o 
+```SQL
+select count(*) from clients c, orders o
 			where c.idClient = idOrderClient;
-~~~
+```
 
 **4**
 
 ### Quantos pedidos cada cliente efetuou?
 
-~~~SQL
-select c.idClient, Fname, count(*) as Number_of_orders from clients c 
+```SQL
+select c.idClient, Fname, count(*) as Number_of_orders from clients c
 				inner join orders o ON c.idClient = o.idOrderClient
 		group by idClient;
-~~~
+```
 
-![Number of orders]()
-
+## ![Number of orders](https://github.com/devcaiada/db-logic-project/blob/main/assets/Number%20of%20orders.png?raw=true)
