@@ -1,6 +1,6 @@
 # Projeto Lógico para Banco de Dados
 
-Neste projeto, iremos criar um banco de dados para um e-commerce, desde a modelagem inicial até a inserção de dados exemplo.
+Neste projeto, iremos criar um banco de dados para um e-commerce, desde a modelagem inicial, a inserção de dados exemplo, algumas consultas até temas mais avançados como procedures e eventos.
 
 ## 1. Diagrama Entidade-Relacionamento (ER)
 
@@ -272,3 +272,116 @@ select c.idClient, Fname, count(*) as Number_of_orders from clients c
 ```
 
 ## ![Number of orders](https://github.com/devcaiada/db-logic-project/blob/main/assets/Number%20of%20orders.png?raw=true)
+
+## 5. Criando índices para otimizar as consultas
+
+### Índice Clusterizado (na tabela orders)
+
+Criação do índice clusterizado na coluna idOrderClient.
+
+```SQL
+ALTER TABLE orders
+ADD INDEX idx_order_client (idOrderClient);
+```
+
+### Índice Não-clusterizado (na tabela productStorage)
+
+Criação do índice não-clusterizado na coluna storageLocation.
+
+```SQL
+CREATE INDEX idx_storage_location ON productStorage (storageLocation);
+```
+
+### Índice em Coluna de Chave Estrangeira (na tabela productOrder)
+
+Criação do índice na coluna idPOproduct (chave estrangeira).
+
+```SQL
+ALTER TABLE productOrder
+ADD INDEX idx_product_order (idPOproduct);
+```
+
+### Índice em Coluna de Busca e Filtro (na tabela product)
+
+Criação do índice na coluna Pname.
+
+```SQL
+CREATE INDEX idx_product_name ON product (Pname);
+```
+
+## 6. Criando procedure para inserção de dados
+
+Vamos criar uma procedure para inserir dados na tabela **clients** do nosso banco de dados com uma verificação no tamanho do **CPF**.
+
+```SQL
+delimiter \\
+create procedure procedure_client_insert(
+	in Fname_p VARCHAR(10),
+	in Minit_p VARCHAR(3),
+	in Lname_p VARCHAR(20),
+	in CPF_p CHAR(11),
+	in Address_p VARCHAR(255),
+	in ClientType_p ENUM('PF', 'PJ')
+)
+begin
+	if (length(CPF_p) = 11) then
+		insert into clients (Fname, Minit, Lname, CPF, Address, ClientType) values(Fname_p, Minit_p, Lname_p, CPF_p, Address_p, ClientType_p);
+	else
+		select 'Forneça um CPF válido.' as Message_error;
+	end if;
+
+end \\
+delimiter ;
+```
+
+Com a procedure criada podemos inserir os dados sem utilizar a função **INSERT** do SQL. Nesse caso chamaríamos a procedure e passaríamos os dados da seguinte forma:
+
+```SQL
+call procedure_client_insert('Caio', 'P', 'Arruda', '12345678910', 'Rua das dores, 42', 'PF');
+```
+
+Podemos criar algo mais avançado com as procedures. No caso vamos criar uma função que recebe um valor inteiro, e para cada valor de 1 a 3, ele retorna uma ação.
+
+```SQL
+DELIMITER //
+CREATE PROCEDURE ManageClients(IN action INT)
+BEGIN
+    DECLARE done INT DEFAULT FALSE;
+    DECLARE client_id INT;
+    DECLARE first_name VARCHAR(255);
+    DECLARE last_name VARCHAR(255);
+    DECLARE cpf CHAR(11);
+    DECLARE client_type ENUM('PJ', 'PF');
+
+    DECLARE cur CURSOR FOR
+        SELECT idClient, Fname, Lname, CPF, ClientType
+        FROM clients;
+
+    DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
+
+    IF action = 1 THEN
+        -- Selecionar registros
+        OPEN cur;
+        read_loop: LOOP
+            FETCH cur INTO client_id, first_name, last_name, cpf, client_type;
+            IF done THEN
+                LEAVE read_loop;
+            END IF;
+                SELECT idClient, Fname, Lname FROM clients WHERE idClient = client_id;
+        END LOOP;
+        CLOSE cur;
+    ELSEIF action = 2 THEN
+        -- Atualizar registros
+            UPDATE clients SET Address = 'NovoEndereco' WHERE idClient = 1;
+    ELSEIF action = 3 THEN
+        -- Excluir registros
+            DELETE FROM clients WHERE idClient = 1;
+    ELSE
+        -- Ação inválida
+        SELECT 'Ação inválida. Escolha 1 para SELECT, 2 para UPDATE ou 3 para DELETE.';
+    END IF;
+END //
+DELIMITER ;
+```
+
+Na opção 1 (Selecionar clientes), criamos um looping onde ele trará uma consulta para cada cliente cadastrado na tabela **clients**.
