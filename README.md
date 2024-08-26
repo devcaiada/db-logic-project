@@ -385,3 +385,115 @@ DELIMITER ;
 ```
 
 Na opção 1 (Selecionar clientes), criamos um looping onde ele trará uma consulta para cada cliente cadastrado na tabela **clients**.
+
+---
+
+## 7. Criando views no banco de dados
+
+Vamos criar algumas views para responder perguntas padrões.
+
+### View de Clientes com Nome Completo
+
+```SQL
+CREATE VIEW view_clients AS
+    SELECT idClient, CONCAT(Fname, ' ', Minit, '.', ' ', Lname) AS Nome, CPF, Address as Endereco, ClientType as Tipo
+    FROM clients;
+```
+
+### View de Produtos Disponíveis
+
+```SQL
+CREATE VIEW view_available_products AS
+    SELECT idProduct, Pname, category, avaliação, size
+    FROM product
+    WHERE classification_kids = false;
+```
+
+### View de Pedidos Confirmados
+
+```SQL
+CREATE VIEW view_confirmed_orders AS
+    SELECT idOrder, orderDescription, sendValue
+    FROM orders
+    WHERE orderStatus = 'Confirmado';
+```
+
+### View de Fornecedores com Nome e CNPJ
+
+```SQL
+CREATE VIEW view_suppliers AS
+    SELECT idSupplier, SocialName, CNPJ
+    FROM supplier;
+```
+
+### View de Vendedores com Nome e CPF
+
+```SQL
+CREATE VIEW vw_sellers AS
+    SELECT idSeller, SocialName, CPF
+    FROM seller;
+```
+
+## Criando um usuário para acessar nossas views
+
+Vamos criar um novo usuário para o nosso banco de dados e conceder acesso total para a nossa view **view_clients** conforme exemplo abaixo:
+
+### Criando o usuário
+
+```SQL
+CREATE USER 'caio'@'localhost' IDENTIFIED BY '123789';
+```
+
+### Concedendo os privilégios
+
+```SQL
+GRANT ALL PRIVILEGES ON ecommerce.view_clients TO 'caio'@'localhost';
+```
+
+## Dica
+
+Sempre que você fizer alterações nas permissões, recarregue os privilégios para que as alterações entrem em vigor:
+
+```SQL
+FLUSH PRIVILEGES;
+```
+
+## 8. Criação de triggers
+
+Imagine que por algum motivo podemos excluir cadastros da tabela cliente. Como esse é um dado muito importante, é necessário criarmos um trigger para não perdermos essas informações conforme exemplo abaixo:
+
+```SQL
+DELIMITER //
+CREATE TRIGGER trigger_before_delete_client
+BEFORE DELETE ON clients
+FOR EACH ROW
+BEGIN
+    INSERT INTO client_history (idClient, Fname, Minit, Lname, CPF, Address, ClientType)
+    VALUES (OLD.idClient, OLD.Fname, OLD.Minit, OLD.Lname, OLD.CPF, OLD.Address, OLD.ClientType);
+END;
+//
+DELIMITER ;
+```
+
+Neste exemplo, assumimos que temos uma tabela **client_history** com os campos (idClient, Fname, Minit, Lname, CPF, Address, ClientType) para armazenarmos os dados de clientes excluidos.
+
+Ainda assumindo que temos a tabela **client_history**, podemos criar um trigger para o update de clientes. Uma vez que haja alteração do CPF, armazenamos as informações do antigo cliente.
+
+```SQL
+DELIMITER //
+CREATE TRIGGER trg_before_update_client
+BEFORE UPDATE ON clients
+FOR EACH ROW
+BEGIN
+    IF NEW.CPF <> OLD.CPF THEN
+        INSERT INTO client_history (idClient, Fname, Minit, Lname, CPF, Address, ClientType)
+        VALUES (OLD.idClient, OLD.Fname, OLD.Minit, OLD.Lname, OLD.CPF, OLD.Address, OLD.ClientType);
+    END IF;
+END;
+//
+DELIMITER ;
+```
+
+Caso o novo CPF seja diferente do anterior, então é um novo cliente, podendo corromper as informações do banco de dados no update.
+
+---
