@@ -497,3 +497,276 @@ DELIMITER ;
 Caso o novo CPF seja diferente do anterior, então é um novo cliente, podendo corromper as informações do banco de dados no update.
 
 ---
+
+<br>
+</br>
+
+## 9. Criação de Transações com Rollback e Procedure
+
+Vamos criar um exemplo de Stored Procedure que realiza uma inserção de um novo cliente, um novo pedido e a atualização do estoque de produtos com um comando Rollback caso a transação não seja concluída ou haja erros.
+
+Primeiro de tudo devemos desabilitar o autocommit no MySQL:
+
+```SQL
+-- Desabilitar o autocommit para a sessão atual
+SET autocommit = 0;
+```
+
+Na sequência vamos começar nossa procedure e logo em seguida nossa transação:
+
+```SQL
+DELIMITER //
+
+CREATE PROCEDURE CreateOrder(
+    IN p_Fname VARCHAR(10),
+    IN p_Minit CHAR(3),
+    IN p_Lname VARCHAR(20),
+    IN p_CPF CHAR(11),
+    IN p_Address VARCHAR(255),
+    IN p_ClientType ENUM('PJ', 'PF'),
+    IN p_orderDescription VARCHAR(255),
+    IN p_sendValue FLOAT,
+    IN p_paymentCash BOOLEAN,
+    IN p_productId INT,
+    IN p_quantity INT
+)
+BEGIN
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        -- Rollback da trnsação caso haja erro
+        ROLLBACK;
+    END;
+
+    -- Inicio da transação
+    START TRANSACTION;
+
+    -- Inserção de um novo cliente
+    INSERT INTO clients (Fname, Minit, Lname, CPF, Address, ClientType)
+    VALUES (p_Fname, p_Minit, p_Lname, p_CPF, p_Address, p_ClientType);
+
+    -- Pegar o último ID inserido
+    SET @lastClientId = LAST_INSERT_ID();
+
+    -- Inserir uma nova ordem
+    INSERT INTO orders (idOrderClient, orderDescription, sendValue, paymentCash)
+    VALUES (@lastClientId, p_orderDescription, p_sendValue, p_paymentCash);
+
+    -- Pegar o último ID inserido em orders
+    SET @lastOrderId = LAST_INSERT_ID();
+
+    -- Inserir o produto em order
+    INSERT INTO productOrder (idPOproduct, idPOorder, poQuantity)
+    VALUES (p_productId, @lastOrderId, p_quantity);
+
+    -- Atualizar a quantidade do produto
+    UPDATE productStorage
+    SET quantity = quantity - p_quantity
+    WHERE idProdStorage = p_productId;
+
+    -- Commitar a transação
+    COMMIT;
+END //
+
+DELIMITER ;
+```
+
+Este procedimento armazenado realiza as seguintes operações dentro de uma transação:
+
+1. Insere um novo cliente na tabela clients;
+2. Insere um novo pedido na tabela orders associado ao cliente recém-criado;
+3. Insere o produto no pedido na tabela productOrder;
+4. Atualiza a quantidade do produto no estoque na tabela productStorage.
+
+Se ocorrer algum erro durante a execução, a transação será revertida (rollback) para garantir a integridade dos dados.
+
+### Utilizando Rollback parcial (SAVEPOINT)
+
+```SQL
+DELIMITER //
+
+CREATE PROCEDURE CreateOrder(
+    IN p_Fname VARCHAR(10),
+    IN p_Minit CHAR(3),
+    IN p_Lname VARCHAR(20),
+    IN p_CPF CHAR(11),
+    IN p_Address VARCHAR(255),
+    IN p_ClientType ENUM('PJ', 'PF'),
+    IN p_orderDescription VARCHAR(255),
+    IN p_sendValue FLOAT,
+    IN p_paymentCash BOOLEAN,
+    IN p_productId INT,
+    IN p_quantity INT
+)
+BEGIN
+    DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        -- Rollback da transação em caso de erros
+        ROLLBACK;
+    END;
+
+    -- Start da transação
+    START TRANSACTION;
+
+    -- Savepoint depois do start da transação
+    SAVEPOINT sp_start;
+
+    -- Inserir um novo cliente
+    INSERT INTO clients (Fname, Minit, Lname, CPF, Address, ClientType)
+    VALUES (p_Fname, p_Minit, p_Lname, p_CPF, p_Address, p_ClientType);
+
+    -- Savepoint depois de inserir um cliente
+    SAVEPOINT sp_after_client;
+
+    -- Pegar o ID do último cliente inserido
+    SET @lastClientId = LAST_INSERT_ID();
+
+    -- Inserir um novo pedido
+    INSERT INTO orders (idOrderClient, orderDescription, sendValue, paymentCash)
+    VALUES (@lastClientId, p_orderDescription, p_sendValue, p_paymentCash);
+
+    -- Savepoint depois do pedido
+    SAVEPOINT sp_after_order;
+
+    -- Pegar o ID do último pedido
+    SET @lastOrderId = LAST_INSERT_ID();
+
+    -- Inserção do produto no pedido
+    INSERT INTO productOrder (idPOproduct, idPOorder, poQuantity)
+    VALUES (p_productId, @lastOrderId, p_quantity);
+
+    -- Savepoint depois de inserir o produto
+    SAVEPOINT sp_after_product_order;
+
+    -- Atualização da quantidade do produto no estoque
+    UPDATE productStorage
+    SET quantity = quantity - p_quantity
+    WHERE idProdStorage = p_productId;
+
+    -- Savepoint depois de atualizar o estoque
+    SAVEPOINT sp_after_storage_update;
+
+    -- Commit da transação
+    COMMIT;
+END //
+
+DELIMITER ;
+```
+
+Neste exemplo, adicionei SAVEPOINTs após cada operação crítica. Se ocorrer um erro, você pode fazer rollback para qualquer um desses pontos de salvamento específicos, se necessário. Isso proporciona um controle mais granular sobre a transação.
+
+<br>
+</br>
+
+## 10. Executando Backup e Recovery de um Banco de Dados com MySQLDump
+
+Vamos executar um comando de backup de banco de dados utilizando o MySQLDump. Essa ferramenta é acessível através do CMD do Windows.
+
+O CMD DEVE SER EXECUTADO COMO ADMINISTRADOR PARA FUNCIONAR.
+
+Primeiro de tudo devemos acessar a pasta do MySQLDump:
+
+```
+cd c:\program files\mysql\mysql server 8.0\bin\
+```
+
+Após acessar a pasta da nossa ferramenta, vamos executar o seguinte comando para gerar um backup do nosso banco **ecommerce**.
+
+```
+mysqldump --user root --password --databases ecommerce > ecommerce_backup.sql
+```
+
+A partir desse comando ela irá gerar um arquivo SQL com todas as sintaxes do banco escolhido. Deixei o arquivo neste repositório, na pasta **backup** como exemplo.
+
+- Trecho do arquivo salvo:
+
+```SQL
+-- MySQL dump 10.13  Distrib 8.0.35, for Win64 (x86_64)
+--
+-- Host: localhost    Database: ecommerce
+-- ------------------------------------------------------
+-- Server version	8.0.35
+
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
+/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
+/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
+/*!50503 SET NAMES utf8mb4 */;
+/*!40103 SET @OLD_TIME_ZONE=@@TIME_ZONE */;
+/*!40103 SET TIME_ZONE='+00:00' */;
+/*!40014 SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0 */;
+/*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
+/*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
+/*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
+
+--
+-- Current Database: `ecommerce`
+--
+
+CREATE DATABASE /*!32312 IF NOT EXISTS*/ `ecommerce` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci */ /*!80016 DEFAULT ENCRYPTION='N' */;
+
+USE `ecommerce`;
+
+--
+-- Table structure for table `clients`
+--
+
+DROP TABLE IF EXISTS `clients`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `clients` (
+  `idClient` int NOT NULL AUTO_INCREMENT,
+  `Fname` varchar(10) DEFAULT NULL,
+  `Minit` char(3) DEFAULT NULL,
+  `Lname` varchar(20) DEFAULT NULL,
+  `CPF` char(11) NOT NULL,
+  `Address` varchar(255) DEFAULT NULL,
+  `ClientType` enum('PJ','PF') NOT NULL,
+  PRIMARY KEY (`idClient`),
+  UNIQUE KEY `unique_cpf_client` (`CPF`)
+) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+...
+```
+
+<br></br>
+
+### Restauração
+
+Para restaurarmos um banco de dados a partir do backup que geramos, basta utilizar o seguinte comando no CMD:
+
+```
+mysql -u root -p mydatabase < mydatabase_backup.sql
+```
+
+<br></br>
+
+### Criando um backup com routines, eventos e triggers
+
+Agora vamos criar um backup de nosso banco de dados de uma forma mais completa, adicionando routines (procedures), eventos e triggers. Abaixo o código utilizado no CMD do Windows:
+
+```
+mysqldump --routines --triggers --events -u root -p ecommerce > ecommerce_routines_bkp.sql
+```
+
+Lembrando que para executar esse código é necessário estar dentro da seguinte pasta no CMD:
+
+```
+c:\program files\mysql\mysql server 8.0\bin\
+```
+
+Vou deixar o arquivo gerado **_ecommerce_routines_bkp_** na pasta backup desse repositório.
+
+<br></br>
+
+### EXTRA
+
+- Compressão do backup:
+
+```
+mysqldump -u root -p mydatabase | gzip > mydatabase_backup.sql.gz
+```
+
+- Restauração de um backup comprimido:
+
+```
+gunzip < mydatabase_backup.sql.gz | mysql -u root -p mydatabase
+```
